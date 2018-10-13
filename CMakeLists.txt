@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(example)
+project(sql_example)
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -std=c++14 -fPIC -Wall")
@@ -17,6 +17,6 @@ else()
 	set_property(TARGET SilkroadSecurity PROPERTY IMPORTED_LOCATION_RELEASE ../lib/libSilkroadSecurity.so)
 endif()
 
-add_library(example SHARED src/main.cpp src/base_plugin.cpp)
+add_library(sql_example SHARED src/main.cpp src/base_plugin.cpp src/nanodbc.cpp)
 
-target_link_libraries(example ${Boost_LIBRARIES} pthread curl SilkroadSecurity)
+target_link_libraries(sql_example ${Boost_LIBRARIES} pthread curl odbc SilkroadSecurity)

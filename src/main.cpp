@@ -32,6 +32,7 @@
 
 #include "stream_utility.h"
 #include "base_plugin.h"
+#include "nanodbc.h"
 
 extern boost::filesystem::path executable_path();
 
@@ -62,6 +63,12 @@ struct item
 class plugin : public base_plugin
 {
 private:
+
+	// https://nanodbc.github.io/nanodbc/
+	nanodbc::connection sql;
+
+	// https://www.connectionstrings.com/sql-server-2008/
+	const std::string connection_string = "Driver={ODBC Driver 17 for SQL Server};Server=;Database=SRO_VT_SHARD;UID=sa;PWD=";
 
 	// asio
 	boost::asio::io_service & io_service;
@@ -146,12 +153,87 @@ public:
 		}
 
 		curl_global_cleanup();
+
+		try
+		{
+			sql.connect(connection_string);
+		}
+		catch (const std::exception & e)
+		{
+			std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+		}
 	}
 
 	// Library is being unloaded
 	// Clean up any pointers, threads, etc.
 	~plugin()
 	{
+		if (sql.connected())
+		{
+			sql.disconnect();
+		}
+	}
+
+	void select_example()
+	{
+		try
+		{
+			// Warning: only select the fields you need!
+			auto results = nanodbc::execute(sql, "SELECT TOP 100 FROM dbo._Char");
+
+			while (results.next())
+			{
+				std::cout << results.get<std::string>("CharName16") << "\t" << results.get<int>("CurLevel") << "\t" << results.get<float>("PosX") << "\t" << results.get<float>("PosY") << "\t" << results.get<float>("PosZ") << "\n";
+			}
+		}
+		catch (const std::exception & e)
+		{
+			std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+		}
+	}
+
+	void update_example()
+	{
+		try
+		{
+			// Use transactions when executing a large number of statements
+			nanodbc::transaction transaction(sql);
+			nanodbc::statement statement(sql);
+
+			const std::string str = "";
+
+			nanodbc::prepare(statement, "UPDATE dbo._Char SET NickName16=? WHERE CharID > 0");
+			statement.bind(0, str.c_str());
+
+			nanodbc::execute(statement);
+			transaction.commit();
+		}
+		catch (const std::exception & e)
+		{
+			std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+		}
+	}
+
+	void stored_procedure_example()
+	{
+		try
+		{
+			nanodbc::statement statement(sql);
+
+			int CharID = 0;
+			int result = 0;
+
+			nanodbc::prepare(statement, "{ ? = CALL dbo._GetLatestRegionID(?) }");
+			statement.bind(0, &result, nanodbc::statement::PARAM_RETURN);
+			statement.bind(1, &CharID);
+			nanodbc::execute(statement);
+
+			std::cout << result << "\n";
+		}
+		catch (const std::exception & e)
+		{
+			std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+		}
 	}
 
 	void load_skills(const std::string & text, const std::string & new_line = "\n")
@@ -218,6 +300,25 @@ public:
 	{
 		if (type == ConnectionType::Agent)
 		{
+			if (opcode == 0x0000)
+			{
+				std::lock_guard<std::mutex> lock(m);
+
+				// Do SQL stuff
+				// If you need to make lots of requests, you should add them to a queue and have a separate thread process the data
+
+				try
+				{
+					if (!sql.connected())
+					{
+						sql.connect(connection_string);
+					}
+				}
+				catch (const std::exception & e)
+				{
+					std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+				}
+			}
 		}
 
 		return true;	// Keep the packet
@@ -279,7 +380,7 @@ extern "C" boost::shared_ptr<plugin> plugin_initialize(int argc, char *argv[], b
 // Returns the plugin name
 extern "C" const char* plugin_name()
 {
-	return "example";
+	return "sql_example";
 }
 
 // Returns the plugin version
