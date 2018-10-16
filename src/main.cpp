@@ -68,7 +68,8 @@ private:
 	nanodbc::connection sql;
 
 	// https://www.connectionstrings.com/sql-server-2008/
-	const std::string connection_string = "Driver={ODBC Driver 17 for SQL Server};Server=;Database=SRO_VT_SHARD;UID=sa;PWD=";
+	// Driver={ODBC Driver 17 for SQL Server};Server=;Database=SRO_VT_SHARD;UID=sa;PWD=
+	std::string connection_string;
 
 	// asio
 	boost::asio::io_service & io_service;
@@ -96,7 +97,8 @@ public:
 		po::options_description desc;
 		desc.add_options()
 			("skill-data-url", po::value<std::string>(), "Skill data URL")
-			("item-data-url", po::value<std::string>(), "Item data URL");
+			("item-data-url", po::value<std::string>(), "Item data URL")
+			("mssql-string", po::value<std::string>(), "MSSQL connection string");
 
 		po::variables_map vm;
 		po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
@@ -154,13 +156,21 @@ public:
 
 		curl_global_cleanup();
 
-		try
+		if (vm.count("mssql-string"))
 		{
-			sql.connect(connection_string);
+			connection_string = vm["mssql-string"].as<std::string>();
 		}
-		catch (const std::exception & e)
+
+		if (!connection_string.empty())
 		{
-			std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+			try
+			{
+				sql.connect(connection_string);
+			}
+			catch (const std::exception & e)
+			{
+				std::cout << "[" << __FUNCTION__ << "] " << e.what() << "\n";
+			}
 		}
 	}
 
